@@ -2,12 +2,24 @@ const express = require('express');
 const { route } = require('../API/server');
 const router = express.Router()
 const Projects = require('../data/helpers/projectModel');
-const Projects2 = require('../data/helpers/actionModel')
-
 
 // GET projects
 
-router.get('/:id', (req, res) => {
+router.get('/', (req, res) => {
+    Projects.get()
+      .then(projects => {
+        res.status(200).json({data: projects});
+      })
+      .catch(err => {
+        res.status(500).json({
+            message: 'Cannot GET'
+        });
+      })
+  });
+
+// GET /api/projects/:id
+
+router.get('/:id', validateProjectId, (req, res) => {
     Projects.get(req.params.id)
         .then(project => {
             if (project) {
@@ -28,7 +40,7 @@ router.get('/:id', (req, res) => {
 
 // GET /api/projects/:id/actions
 
-router.get('/:id/actions', (req, res) => {
+router.get('/:id/actions', validateProjectId, (req, res) => {
     Projects.getProjectActions(req.params.id)
         .then(project => {
             if (project) {
@@ -49,33 +61,95 @@ router.get('/:id/actions', (req, res) => {
 
 // POST 
 
-router.post('/:id/actions', (req, res) => {
-    const { id: id } = req.params
-    const { description } = req.body
+router.post('/', validateProject, (req, res) => {
+    Projects.insert(req.body)
+      .then(project => {
+        res.status(201).json({data: project});
+      })
+      .catch(err => {
+        res.status(500).json({
+            message: 'Cannot save this project to the database.'
+        });
+      })
+  });
 
-    if (!req.body.description) {
-        return res.status(400).json({
-            errorMessage: 'Please provide a description.'
-        })
-    }
+  // PUT /api/projects/:id
 
-    Projects2.insert({ id, description })
-        .then(project => {
-            if (!project.id) {
-                res.status(404).json({
-                    message: 'The project with the specified ID does not exist.'
-                })
-            } else {
-                res.status(201).json({ data: project })
-            }
-        })
-        .catch(err => {
-            console.log(err)
-            res.status(500).json({
-                error: 'There was an error while saving the project to the database'
+  router.put('/:id', (req,res) => {
+    Projects.update(req.params.id, req.body)
+    .then(id => {
+        if(id) {
+            res.status(200).json(id)
+        } else {
+            res.status(404).json({
+                message: 'The project with specified ID cannot be found.'    
             })
+        }
+    })
+    .catch(err => {
+        console.log(err)
+        res.status(500).json({
+            message: 'There was an error updating the project.'
         })
+    })
 })
+
+
+// DELETE /api/posts/:id
+
+router.delete('/:id', validateProjectId, (req, res) => {
+    Projects.remove(req.params.id)
+    .then(count => {
+        if (count > 0) {
+            res.status(200).json({
+                message: 'The project has been deleted.'
+            })
+        }
+    })
+    .catch(err => {
+        console.log(err)
+        res.status(500).json({
+            message: 'Cannot delete the project.'
+        })
+    })
+})
+
+
+
+
+
+  // Middleware
+
+  function validateProject(req, res, next) {
+    console.log(req.body);
+    if (!req.body){
+      return res.status(400).json({message: 'Missing project data.'})
+    } else if (!req.body.name) {
+      return res.status(400).json({message: 'Missing required name field.'});
+    } else if (!req.body.description) {
+      return res.status(400).json({message: 'Missing required description field.'});
+    } else {
+        next();
+    }
+  
+  }
+  
+
+  function validateProjectId(req, res, next){
+    Projects.get(req.params.id)
+      .then(project => {
+        console.log(project);
+        if (project) {
+          req.project = project;
+          return next();
+        } else {
+        return res.status(404).json({message: 'Project not found.'});
+        }
+      })
+      .catch(err => {
+        return res.status(400).json({message: 'Invalid Project ID.'});
+      })
+  }
 
 
 
